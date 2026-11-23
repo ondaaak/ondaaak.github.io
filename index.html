@@ -49,294 +49,56 @@
             padding: 2rem 0;
             margin-top: 3rem;
         }
-    </style>
-</head>
-<body>
-
-    <!-- Navigace -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="#">VoIP Suricata IDS/IPS</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="#description">1. Popis & Stav techniky</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#solution">2. Řešení úkolu</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#testing">3. Testování & Výsledky</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#conclusion">4. Závěr</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#references">5. Zdroje</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hlavička / Title -->
-    <header class="hero-section">
-        <div class="container">
-            <span class="badge badge-vsb mb-2">VŠB-TUO • Katedra telekomunikační techniky • Multimedia Communication and Content Security</span>
-            <h1 class="display-5 fw-bold mt-2">Advanced configuration of the Suricata IDS/IPS from the VoIP point of view</h1>
-            <p class="lead text-light opacity-75 mt-3">
-                Pokročilá detekce a prevence útoků v IP telefonii (SIP/RTP) pomocí vícevláknového enginu Suricata v inline režimu.
-            </p>
-            <hr class="border-secondary my-4">
-            <div class="row text-light small">
-                <div class="col-md-4"><strong>Projekt č.:</strong> 8 (max. 15 bodů)</div>
-                <div class="col-md-4"><strong>Řešitelé:</strong> Ondřej Kania, Jakub Černík</div>
-                <div class="col-md-4"><strong>Vyučující:</strong> Ing. Filip Řezáč, Ph.D.</div>
-            </div>
-        </div>
-    </header>
-
-    <main class="container">
-
-        <!-- 1. Description & State of the Art -->
-        <section id="description" class="card p-4">
-            <h2 class="h3 border-bottom pb-2 mb-3">1. Popis problematiky a současný stav (State of the Art)</h2>
-            <p>
-                Moderní VoIP infrastruktura, postavená nejčastěji na signalizačním protokolu <strong>SIP (Session Initiation Protocol)</strong> a transportním protokolu <strong>RTP (Real-time Transport Protocol)</strong>, čelí specifickým aplikačním hrozbám. Běžné stavové firewally pracující na 3. a 4. vrstvě modelu ISO/OSI nejsou schopny analyzovat vnitřní strukturu SIP zpráv, což útočníkům umožňuje obcházet základní perimetrovou ochranu.
-            </p>
-            <div class="row mt-3">
-                <div class="col-md-6">
-                    <h3 class="h5">Hlavní bezpečnostní hrozby ve VoIP</h3>
-                    <ul>
-                        <li><strong>SIP Scanning & Enumeration:</strong> Mapování aktivních ústředen a platných linek (extensions) nástroji jako <em>SIPVicious</em>.</li>
-                        <li><strong>Brute-force útoky na registraci:</strong> Automatizované hádání hesel k SIP účtům (záplava požadavků <code>REGISTER</code> s odpověďmi <code>401 Unauthorized</code>).</li>
-                        <li><strong>Toll Fraud:</strong> Zneužití kompromitovaných účtů ke generování drahých mezinárodních hovorů.</li>
-                        <li><strong>Aplikační DoS / INVITE Flood:</strong> Vyčerpání zdrojů pobočkové ústředny (Asterisk/Kamailio) a degradace kvality legitimních hovorů.</li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <h3 class="h5">Role systému Suricata IDS/IPS</h3>
-                    <p>
-                        <strong>Suricata</strong> (vyvíjená organizací OISF) je vysoce výkonný, vícevláknový engine pro detekci (IDS) a aktivní prevenci (IPS) průniků. Oproti klasickým řešením přináší pro VoIP klíčové výhody:
-                    </p>
-                    <ul>
-                        <li><strong>Nativní App-Layer parsery pro SIP a RTP:</strong> Umožňují přímou kontrolu hlaviček (<code>User-Agent</code>, <code>Method</code>, <code>Status-Code</code>, <code>URI</code>) pomocí tzv. <em>sticky buffers</em>.</li>
-                        <li><strong>Inline IPS režim (NFQUEUE):</strong> Schopnost zahazovat škodlivé pakety v reálném čase (akce <code>drop</code>) dříve, než dorazí k ústředně.</li>
-                        <li><strong>Strukturovaný výstup EVE JSON:</strong> Detailní telemetrie vhodná pro integraci se SIEM systémy nebo nástroji typu Fail2Ban.</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- 2. Task Solution -->
-        <section id="solution" class="card p-4">
-            <h2 class="h3 border-bottom pb-2 mb-3">2. Návrh a řešení úkolu (Task Solution)</h2>
-
-            <h3 class="h5 mt-3">2.1 Topologie testovacího prostředí</h3>
-            <p>
-                Testovací prostředí je navrženo jako izolovaná virtuální síť skládající se ze tří uzlů, kde brána se systémem Suricata funguje v inline režimu (IPS) před pobočkovou ústřednou Asterisk:
-            </p>
-            <ul>
-                <li><strong>VoIP Server (Oběť):</strong> Ubuntu Server + Asterisk PBX (<code>192.168.10.10</code>) + 2 legitimní SIP softphony pro měření kvality hovoru.</li>
-                <li><strong>Suricata IDS/IPS Gateway:</strong> Linux router/bridge s aktivním přesměrováním provozu přes <code>iptables NFQUEUE</code>.</li>
-                <li><strong>Útočník (Attacker):</strong> Kali Linux s nástroji <code>SIPVicious</code> (svmap, svwar, svcrack) a <code>SIPp</code>.</li>
-            </ul>
-
-            <div class="placeholder-box">
-                <strong>[Místo pro schéma síťové topologie]</strong><br>
-                Až vytvoříš obrázek schématu, ulož ho jako <code>img/topology.png</code> a nahraď tento box tagem <code>&lt;img src="img/topology.png" class="img-fluid"&gt;</code>.
-            </div>
-
-            <h3 class="h5 mt-4">2.2 Pokročilá konfigurace <code>suricata.yaml</code></h3>
-            <p>V hlavní konfiguraci byly definovány síťové skupiny pro VoIP, aktivovány aplikační parsery pro SIP a RTP a nastaven strukturovaný výstup <code>eve.json</code>:</p>
-            <pre><code>vars:
-  address-groups:
-    HOME_NET: "[192.168.10.0/24]"
-    EXTERNAL_NET: "!$HOME_NET"
-    VOIP_SERVERS: "[192.168.10.10]"
-  port-groups:
-    SIP_PORTS: "[5060,5061]"
-    RTP_PORTS: "[10000:20000]"
-
-app-layer:
-  protocols:
-    sip:
-      enabled: yes
-    rtp:
-      enabled: yes
-
-outputs:
-  - eve-log:
-      enabled: yes
-      filetype: regular
-      filename: eve.json
-      types:
-        - alert:
-            tagged-packets: yes
-        - sip:
-            enabled: yes
-        - rtp:
-            enabled: yes</code></pre>
-
-            <h3 class="h5 mt-4">2.3 Aktivace IPS režimu (NFQUEUE)</h3>
-            <p>Pro přepnutí z pasivního monitorování (IDS) do aktivní blokace (IPS) bylo nastaveno přesměrování paketů z jádra Linuxu do fronty Suricaty:</p>
-            <pre><code>sudo iptables -I FORWARD -j NFQUEUE --queue-num 0
-sudo suricata -c /etc/suricata/suricata.yaml -q 0</code></pre>
-
-            <h3 class="h5 mt-4">2.4 Vlastní detekční a prevenční pravidla (<code>voip-custom.rules</code>)</h3>
-            <p>Byla vytvořena sada pravidel využívajících SIP sticky buffers a prahování (<code>threshold</code>) proti zahlcení a hádání hesel:</p>
-            <pre><code># 1. Blokování známých VoIP skenerů (SIPVicious friendly-scanner)
-drop sip $EXTERNAL_NET any -> $VOIP_SERVERS $SIP_PORTS (msg:"VOIP-IPS SIPVicious Friendly-Scanner Detected"; sip.user_agent; content:"friendly-scanner"; nocase; sid:1000001; rev:1;)
-
-# 2. Prevence SIP REGISTER Brute-Force (více než 10 odpovědí 401 za 30 s)
-drop sip $VOIP_SERVERS $SIP_PORTS -> $EXTERNAL_NET any (msg:"VOIP-IPS SIP REGISTER Brute-Force Attack Detected"; sip.stat_code; content:"401"; threshold: type both, track by_dst, count 10, seconds 30; sid:1000002; rev:1;)
-
-# 3. Ochrana proti SIP INVITE Flood (DoS / Toll Fraud)
-drop sip $EXTERNAL_NET any -> $VOIP_SERVERS $SIP_PORTS (msg:"VOIP-IPS High Rate SIP INVITE Flood"; sip.method; content:"INVITE"; threshold: type threshold, track by_src, count 20, seconds 10; sid:1000003; rev:1;)
-
-# 4. Detekce nečekaného RTP provozu mimo vyhrazený rozsah portů
-alert rtp any any -> $VOIP_SERVERS !$RTP_PORTS (msg:"VOIP-IDS Unexpected RTP Stream Outside Standard Port Range"; sid:1000004; rev:1;)</code></pre>
-
-            <div class="mt-3">
-                <a href="configs/suricata.yaml" class="btn btn-outline-primary btn-sm me-2">Stáhnout suricata.yaml</a>
-                <a href="configs/voip-custom.rules" class="btn btn-outline-primary btn-sm">Stáhnout voip-custom.rules</a>
-            </div>
-        </section>
-
-        <!-- 3. Testing & Results -->
-        <section id="testing" class="card p-4">
-            <h2 class="h3 border-bottom pb-2 mb-3">3. Praktické testování a naměřené výsledky</h2>
-            <p>Účinnost konfigurace byla ověřena ve třech testovacích scénářích porovnávajících chování ústředny bez ochrany, v režimu IDS a v režimu IPS:</p>
-
-            <div class="table-responsive mt-3">
-                <table class="table table-bordered table-striped align-middle">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Testovací scénář</th>
-                            <th>Použitý nástroj / příkaz</th>
-                            <th>Chování bez ochrany</th>
-                            <th>Chování se Suricata IPS</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>1. Skenování SIP ústředny</strong></td>
-                            <td><code>svmap 192.168.10.10</code></td>
-                            <td>Odhalena verze Asterisku i aktivní port 5060.</td>
-                            <td>První paket zahozen (<code>sid:1000001</code>), skener nevidí žádnou odezvu.</td>
-                        </tr>
-                        <tr>
-                            <td><strong>2. Brute-force hesla linky</strong></td>
-                            <td><code>svcrack -u 100 -d dict.txt 192.168.10.10</code></td>
-                            <td>Neomezené zkoušení hesel, vysoké zatížení logů ústředny.</td>
-                            <td>Po 10 neúspěšných pokusech (<code>401</code>) aktivován <code>drop</code> (<code>sid:1000002</code>).</td>
-                        </tr>
-                        <tr>
-                            <td><strong>3. DoS INVITE Flood</strong></td>
-                            <td><code>sipp -sn uac 192.168.10.10 -r 50</code></td>
-                            <td>Výrazný nárůst jitteru a ztrátovosti paketů u probíhajícího hovoru.</td>
-                            <td>Překročení 20 INVITE / 10 s blokováno, legitimní hovor zůstává stabilní.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="placeholder-box">
-                <strong>[Místo pro screenshoty z logů (fast.log / eve.json) a Wiresharku]</strong><br>
-                Sem vlož důkazy z reálného běhu (výpis alertů a ukázku zahozených paketů).
-            </div>
-        </section>
-
-        <!-- 4. Conclusion & Involvement -->
-        <section id="conclusion" class="card p-4">
-            <h2 class="h3 border-bottom pb-2 mb-3">4. Závěr a rozdělení práce (Conclusion & Involvement)</h2>
-            <p>
-                Cílem projektu bylo navrhnout, nakonfigurovat a otestovat systém Suricata IDS/IPS se zaměřením na zabezpečení VoIP infrastruktury. Nasazení aplikačních parserů pro SIP a RTP v kombinaci s inline režimem NFQUEUE prokázalo vysokou účinnost proti automatizovaným skenerům, slovníkovým útokům i aplikačnímu zahlcení.
-            </p>
-            <p>
-                <strong>Omezení řešení:</strong> Aplikační inspekce SIP hlaviček vyžaduje přístup k nešifrované signalizaci. Při nasazení zabezpečeného protokolu <strong>SIPS (SIP over TLS)</strong> a <strong>SRTP</strong> nemůže Suricata číst aplikační vrstvu přímo – v produkčním prostředí je proto nutné ukončit TLS spojení na hraničním prvku (SBC / Kamailio) před inspekcí nebo doplnit detekci o behaviorální analýzu na transportní vrstvě.
-            </p>
-
-            <h3 class="h5 mt-3">Rozdělení práce v týmu (Involvement)</h3>
-            <ul>
-                <li><strong>Ondřej Kania:</strong> Návrh topologie, instalace a konfigurace Asterisk PBX a Suricata IPS (NFQUEUE), tvorba detekčních pravidel.</li>
-                <li><strong>Jakub Černík:</strong> Realizace penetračních a zátěžových testů (SIPVicious, SIPp), analýza logů <code>eve.json</code>, tvorba webové dokumentace a prezentace.</li>
-            </ul>
-        </section>
-
-        <!-- 5. References -->
-        <section id="references" class="card p-4">
-            <h2 class="h3 border-bottom pb-2 mb-3">5. Použité zdroje (References)</h2>
-            <ol class="mb-0">
-                <li>OISF (Open Information Security Foundation). <em>Suricata User Guide – App Layer (SIP &amp; RTP)</em>. Dostupné z: <a href="https://docs.suricata.io/" target="_blank">https://docs.suricata.io/</a></li>
-                <li>Rosenberg, J., et al. <em>RFC 3261: SIP: Session Initiation Protocol</em>. IETF, 2002.</li>
-                <li>Schulzrinne, H., et al. <em>RFC 3550: RTP: A Transport Protocol for Real-Time Applications</em>. IETF, 2003.</li>
-                <li>Enable Security. <em>SIPVicious – VoIP Security Auditing Toolset</em>. Dostupné z: <a href="https://github.com/EnableSecurity/sipvicious" target="_blank">https://github.com/EnableSecurity/sipvicious</a></li>
-                <li>Proofpoint. <em>Emerging Threats Open Ruleset (ET Open)</em>. Dostupné z: <a href="https://rules.emergingthreats.net/" target="_blank">https://rules.emergingthreats.net/</a></li>
-            </ol>
-        </section>
-
-    </main>
-
-    <footer>
-        <div class="container text-center">
-            <p class="mb-1">Semestrální projekt – Multimedia Communication and Content Security</p>
-            <small>VŠB – Technická univerzita Ostrava, Fakulta elektrotechniky a informatiky</small>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html><!DOCTYPE html>
-<html lang="cs">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Projekt #8: Pokročilá konfigurace Suricata IDS/IPS pro VoIP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            color: #212529;
-            scroll-behavior: smooth;
+        .project-navbar {
+            background: rgba(27, 38, 59, 0.96) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
         }
-        .hero-section {
-            background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
-            color: white;
-            padding: 4rem 0;
-            margin-bottom: 2rem;
+        .project-navbar .navbar-brand {
+            color: #f8f9fa;
+            letter-spacing: 0.01em;
         }
-        .card {
-            border: none;
-            box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.06);
-            margin-bottom: 2rem;
+        .project-navbar .navbar-nav {
+            gap: 0.25rem;
         }
-        pre {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            padding: 1rem;
+        .project-navbar .nav-link {
+            position: relative;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 0.88rem;
+            font-weight: 600;
+            padding: 0.55rem 0.75rem !important;
             border-radius: 0.5rem;
-            font-size: 0.9rem;
-            overflow-x: auto;
+            white-space: nowrap;
+            transition: color 0.2s ease, background-color 0.2s ease;
         }
-        .badge-vsb {
+        .project-navbar .nav-link:hover,
+        .project-navbar .nav-link:focus-visible {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.09);
+        }
+        .project-navbar .nav-link.active {
+            color: #fff;
             background-color: #00a896;
-            font-size: 0.85rem;
+            box-shadow: 0 0.25rem 0.75rem rgba(0, 168, 150, 0.24);
         }
-        .placeholder-box {
-            border: 2px dashed #adb5bd;
-            background-color: #e9ecef;
-            padding: 2rem;
-            text-align: center;
-            border-radius: 0.5rem;
-            color: #495057;
-            margin: 1rem 0;
+        .project-navbar .navbar-toggler {
+            border-color: rgba(255, 255, 255, 0.25);
         }
-        footer {
-            background-color: #1b263b;
-            color: #adb5bd;
-            padding: 2rem 0;
-            margin-top: 3rem;
+        @media (max-width: 991.98px) {
+            .project-navbar .navbar-nav {
+                gap: 0.35rem;
+                padding: 0.75rem 0 0.25rem;
+            }
+            .project-navbar .nav-link {
+                white-space: normal;
+            }
         }
     </style>
 </head>
 <body>
 
     <!-- Navigace -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-dark project-navbar sticky-top">
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">VoIP Suricata IDS/IPS</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -357,16 +119,13 @@ alert rtp any any -> $VOIP_SERVERS !$RTP_PORTS (msg:"VOIP-IDS Unexpected RTP Str
     <!-- Hlavička / Title -->
     <header class="hero-section">
         <div class="container">
-            <span class="badge badge-vsb mb-2">VŠB-TUO • Katedra telekomunikační techniky • Multimedia Communication and Content Security</span>
             <h1 class="display-5 fw-bold mt-2">Advanced configuration of the Suricata IDS/IPS from the VoIP point of view</h1>
             <p class="lead text-light opacity-75 mt-3">
                 Pokročilá detekce a prevence útoků v IP telefonii (SIP/RTP) pomocí vícevláknového enginu Suricata v inline režimu.
             </p>
             <hr class="border-secondary my-4">
             <div class="row text-light small">
-                <div class="col-md-4"><strong>Projekt č.:</strong> 8 (max. 15 bodů)</div>
-                <div class="col-md-4"><strong>Řešitelé:</strong> Ondřej Kania, Jakub Černík</div>
-                <div class="col-md-4"><strong>Vyučující:</strong> Ing. Filip Řezáč, Ph.D.</div>
+                <div class="col-md-4"><strong>Ondřej Kania, Jakub Černík</strong></div>
             </div>
         </div>
     </header>
@@ -555,11 +314,53 @@ alert rtp any any -> $VOIP_SERVERS !$RTP_PORTS (msg:"VOIP-IDS Unexpected RTP Str
 
     <footer>
         <div class="container text-center">
-            <p class="mb-1">Semestrální projekt – Multimedia Communication and Content Security</p>
-            <small>VŠB – Technická univerzita Ostrava, Fakulta elektrotechniky a informatiky</small>
+            <p class="mb-1">MKZO projekt - KAN0274 - CER0548</p>
         </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const navLinks = [...document.querySelectorAll('.project-navbar .nav-link')];
+        const sections = navLinks
+            .map(link => document.querySelector(link.getAttribute('href')))
+            .filter(Boolean);
+
+        const setActiveNavLink = () => {
+            let activeSection = sections[0];
+
+            for (const section of sections) {
+                if (section.getBoundingClientRect().top <= 160) {
+                    activeSection = section;
+                }
+            }
+
+            const isAtPageBottom =
+                window.innerHeight + window.scrollY >=
+                document.documentElement.scrollHeight - 4;
+
+            if (isAtPageBottom && sections.includes(document.querySelector('#references'))) {
+                activeSection = document.querySelector('#references');
+            }
+
+            navLinks.forEach(link => {
+                link.classList.toggle(
+                    'active',
+                    link.getAttribute('href') === '#' + activeSection.id
+                );
+            });
+        };
+
+        window.addEventListener('scroll', setActiveNavLink, { passive: true });
+        window.addEventListener('load', setActiveNavLink);
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                const navbarCollapse = document.querySelector('#navbarNav');
+                if (navbarCollapse.classList.contains('show')) {
+                    bootstrap.Collapse.getOrCreateInstance(navbarCollapse).hide();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
